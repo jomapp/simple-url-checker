@@ -1,9 +1,11 @@
-import { rest } from 'msw';
+import {rest} from 'msw';
 import Bottleneck from "bottleneck";
 
 const limiter = new Bottleneck({
     minTime: 250,
-    dropWaitingJobs: true,
+    maxConcurrent: 1,
+    highWater: 0,
+    strategy: Bottleneck.strategy.OVERFLOW,
 });
 
 export const handlers = [
@@ -19,15 +21,19 @@ export const handlers = [
                 let isPersonalDomain = RegExp("(munichsdorfer\.de)([\/\:]|$)").test(urlString);
 
                 return res(ctx.json({
-                    urlString: urlString,
-                    isUrlExists: isUrlExists,
-                    isFile: isFile,
-                    isTutanotaDomain: isTutanotaDomain,
-                    isPersonalDomain: isPersonalDomain
-                })
+                        urlString: urlString,
+                        isUrlExists: isUrlExists,
+                        isFile: isFile,
+                        isTutanotaDomain: isTutanotaDomain,
+                        isPersonalDomain: isPersonalDomain
+                    })
                 );
-            })).then((result) => {
-                return result;
-            });
+            })
+        ).then((result) => {
+            return result;
+        }).catch(() => {
+            return res(
+                ctx.status(429));
+        });
     }),
 ]
