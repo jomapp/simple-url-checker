@@ -4,6 +4,13 @@ const m = require("mithril");
 const {worker} = require('./mocks/browser');
 worker.start();
 
+const limiter = new Bottleneck({
+    minTime: 250,
+    maxConcurrent: 1,
+    highWater: 4,
+    strategy: Bottleneck.strategy.LEAK,
+});
+
 const _START_HEADLINE_TEXT = "Start typing to check if an URL exists ... ✍️";
 const _DEFAULT_HEADLINE_TEXT = "This URL does not exist 😥.";
 
@@ -16,6 +23,7 @@ const urlPattern = new RegExp('^(https?:\\/\\/)?' + // taken from https://stacko
 
 let resultHeadlineText = _START_HEADLINE_TEXT;
 let resultSublineText = "";
+let currentInput = "";
 
 const UrlCard = {
     view: function () {
@@ -31,7 +39,15 @@ const UrlCard = {
                     m("input.input[type=text][placeholder=example.com]", {
                         class: "mt-3 p-3 w-full bg-blue-50 border border-blue-500 rounded-xl block font-mono focus:ring-blue-500 focus:border-blue-500 ",
                         oninput: function (e) {
-                            checkUrlExists(e.target.value);
+                            currentInput = e.target.value;
+
+                            const urlString = currentInput;
+                            if (urlString.length === 0) {
+                                resultHeadlineText = _START_HEADLINE_TEXT;
+                                resultSublineText = "";
+                            } else {
+                                checkUrlExists(urlString);
+                            }
                         },
                     }),
                 ]),
@@ -57,35 +73,41 @@ function isValidURL(urlString) {
 function checkUrlExists(urlString) {
     urlString = urlString.toLowerCase();
     if (!isValidURL(urlString)) {
-        resultHeadlineText = urlString.length !== 0 ? _DEFAULT_HEADLINE_TEXT : _START_HEADLINE_TEXT;
+        resultHeadlineText = _DEFAULT_HEADLINE_TEXT;
         resultSublineText = "";
     } else {
-        m.request({
-            method: "POST",
-            url: "https://api.munichsdorfer.de/checkurlexists",
-            body: {urlString: urlString},
-            withCredentials: true,
-        }).then(function (data) {
-            let resultString = ``;
+        limiter.schedule(() =>
+            m.request({
+                method: "POST",
+                url: "https://api.munichsdorfer.de/checkurlexists",
+                body: {urlString: urlString},
+                withCredentials: true,
+            })
+        ).then(function (data) {
+            if (currentInput === data.urlString) {
+                let resultString = ``;
 
-            if (data.isUrlExists) {
-                resultString = resultString + `This URL does exist 🎉 and points 🧭 to a `;
-            }
-            if (data.isFile) {
-                resultString = resultString + `file 💾. `;
-            } else {
-                resultString = resultString + `directory 📁. `;
-            }
+                if (data.isUrlExists) {
+                    resultString = resultString + `This URL does exist 🎉 and points 🧭 to a `;
+                }
+                if (data.isFile) {
+                    resultString = resultString + `file 💾. `;
+                } else {
+                    resultString = resultString + `directory 📁. `;
+                }
 
-            resultHeadlineText = resultString;
+                resultHeadlineText = resultString;
 
-            if (data.isTutanotaDomain) {
-                resultSublineText = `It is a \"Tutanota\" domain 🎉😊.`;
+                if (data.isTutanotaDomain) {
+                    resultSublineText = `It is a \"Tutanota\" domain 🎉😊.`;
+                }
+                if (data.isPersonalDomain) {
+                    resultSublineText = `It is my own domain 🎉👍.`;
+                }
             }
-            if (data.isPersonalDomain) {
-                resultSublineText = `It is my own domain 🎉👍.`;
-            }
-        }).catch(() => {});
+        }).catch(function (err) {
+            console.log(err);
+        });
     }
 }
 
