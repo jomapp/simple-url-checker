@@ -39,7 +39,7 @@ const UrlCard = {
                     m("input.input[type=text][placeholder=example.com]", {
                         class: "mt-3 p-3 w-full bg-blue-50 border border-blue-500 rounded-xl block font-mono focus:ring-blue-500 focus:border-blue-500 ",
                         oninput: function (e) {
-                            currentInput = e.target.value;
+                            currentInput = e.target.value.toLowerCase();
 
                             const urlString = currentInput;
                             if (urlString.length === 0) {
@@ -71,7 +71,6 @@ function isValidURL(urlString) {
 }
 
 function checkUrlExists(urlString) {
-    urlString = urlString.toLowerCase();
     if (!isValidURL(urlString)) {
         resultHeadlineText = _DEFAULT_HEADLINE_TEXT;
         resultSublineText = "";
